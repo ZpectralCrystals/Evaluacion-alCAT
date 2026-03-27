@@ -1,0 +1,51 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+    font-family: "Segoe UI", "Helvetica Neue", sans-serif;
+    background:
+      radial-gradient(circle at top, rgba(20, 158, 230, 0.22), transparent 30%),
+      linear-gradient(180deg, #020617 0%, #0f172a 45%, #111827 100%);
+    color: #f8fafc;
+  }
+
+  * {
+    @apply border-slate-700;
+  }
+
+  body {
+    @apply min-h-screen bg-slate-950 text-slate-50 antialiased;
+  }
+
+  #root {
+    @apply min-h-screen;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+}
+
+@layer components {
+  .touch-input {
+    @apply min-h-14 w-full rounded-2xl border border-slate-700 bg-slate-900/80 px-4 text-base text-slate-50 outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-400/30;
+  }
+
+  .touch-button {
+    @apply inline-flex min-h-14 w-full items-center justify-center rounded-2xl px-5 py-4 text-base font-semibold transition active:scale-[0.99];
+  }
+
+  .panel {
+    @apply rounded-4xl border border-slate-800 bg-slate-900/75 shadow-panel backdrop-blur;
+  }
+
+  .section-title {
+    @apply text-lg font-semibold text-white;
+  }
+}
