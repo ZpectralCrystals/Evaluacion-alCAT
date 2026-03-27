@@ -98,6 +98,13 @@ export function TemplateItemCard({
           </div>
         ) : (
           <div className="space-y-2">
+            {/* Header de labels - SIEMPRE visible */}
+            <div className="mb-2 grid grid-cols-[minmax(250px,1fr)_280px_140px_auto] gap-3 rounded-lg border border-slate-600 bg-slate-800 px-3 py-2">
+              <span className="block whitespace-nowrap text-xs font-semibold text-slate-200 uppercase tracking-wider">Etiqueta de la opción</span>
+              <span className="block whitespace-nowrap text-xs font-semibold text-slate-200 uppercase tracking-wider">Categoría destino</span>
+              <span className="block whitespace-nowrap text-xs font-semibold text-slate-200 uppercase tracking-wider">Nivel</span>
+              <span className="block"></span>
+            </div>
             {item.categorization_options.map((option, optionIndex) => (
               <CategorizationOptionRow
                 key={`${item.item_id}-option-${optionIndex}`}
