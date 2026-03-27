@@ -47,6 +47,13 @@ export default function SelectorPage() {
     () => events.find((event) => String(event.id) === selectedEventId) ?? null,
     [events, selectedEventId],
   );
+  const availableModalidades = useMemo(() => {
+    if (user?.role === "juez") {
+      const assigned = user.modalidadesAsignadas.filter((value) => value.trim().length > 0);
+      return assigned.length > 0 ? assigned : [];
+    }
+    return [...OFFICIAL_MODALIDADES];
+  }, [user]);
 
   useEffect(() => {
     async function loadEvents() {
@@ -80,6 +87,17 @@ export default function SelectorPage() {
 
     void loadEvents();
   }, [user?.token]);
+
+  useEffect(() => {
+    if (availableModalidades.length === 0) {
+      setSelectedModalidad("");
+      return;
+    }
+
+    setSelectedModalidad((current) =>
+      current && availableModalidades.includes(current) ? current : availableModalidades[0]
+    );
+  }, [availableModalidades]);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -143,11 +161,16 @@ export default function SelectorPage() {
             </label>
             <select
               className="min-h-16 w-full rounded-3xl border border-slate-700 bg-white px-4 py-4 text-xl font-semibold text-slate-950 outline-none transition focus:border-brand-500 focus:ring-4 focus:ring-brand-500/30"
+              disabled={availableModalidades.length === 0}
               onChange={(event) => setSelectedModalidad(event.target.value)}
               value={selectedModalidad}
             >
-              <option value="">Selecciona una modalidad</option>
-              {OFFICIAL_MODALIDADES.map((modalidad) => (
+              <option value="">
+                {availableModalidades.length === 0
+                  ? "No tienes modalidades asignadas"
+                  : "Selecciona una modalidad"}
+              </option>
+              {availableModalidades.map((modalidad) => (
                 <option key={modalidad} value={modalidad}>
                   {modalidad}
                 </option>
@@ -175,7 +198,7 @@ export default function SelectorPage() {
 
           <button
             className="touch-button min-h-16 rounded-3xl bg-brand-500 px-6 py-4 text-xl text-white shadow-lg shadow-brand-500/25"
-            disabled={isLoadingEvents || events.length === 0}
+            disabled={isLoadingEvents || events.length === 0 || availableModalidades.length === 0}
             type="submit"
           >
             Ver Participantes

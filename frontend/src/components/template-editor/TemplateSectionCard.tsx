@@ -5,6 +5,8 @@ type Props = {
   section: EditorTemplateSection;
   sectionIndex: number;
   categories: CategoryRecord[];
+  showSectionMeta?: boolean;
+  showMaxScore?: boolean;
   onTitleChange: (value: string) => void;
   onRoleChange: (value: string) => void;
   onRemoveSection: () => void;
@@ -21,6 +23,8 @@ export function TemplateSectionCard({
   section,
   sectionIndex,
   categories,
+  showSectionMeta = true,
+  showMaxScore = true,
   onTitleChange,
   onRoleChange,
   onRemoveSection,
@@ -34,7 +38,7 @@ export function TemplateSectionCard({
       key={`${section.section_id}-${sectionIndex}`}
       className="rounded-3xl border border-slate-800 bg-slate-950/40 p-4"
     >
-      {/* Section header */}
+      {showSectionMeta ? (
       <div className="grid gap-4 lg:grid-cols-[1fr_0.9fr_auto]">
         <div>
           <label className="mb-2 block text-sm font-medium text-slate-300">
@@ -66,13 +70,15 @@ export function TemplateSectionCard({
           </button>
         </div>
       </div>
+      ) : null}
 
-      {/* Items list */}
       <div className="mt-4 space-y-3">
-        <p className="text-xs text-slate-500">
-          Los identificadores internos de sección e ítems se generan
-          automáticamente.
-        </p>
+        {showSectionMeta ? (
+          <p className="text-xs text-slate-500">
+            Los identificadores internos de sección e ítems se generan
+            automáticamente.
+          </p>
+        ) : null}
 
         {section.items.map((item, itemIndex) => (
           <TemplateItemCard
@@ -80,6 +86,7 @@ export function TemplateSectionCard({
             item={item}
             itemIndex={itemIndex}
             categories={categories}
+            showMaxScore={showMaxScore}
             onLabelChange={(value) =>
               onUpdateItem(itemIndex, (current) => ({
                 ...current,

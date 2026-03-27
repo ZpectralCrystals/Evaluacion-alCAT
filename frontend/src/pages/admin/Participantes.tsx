@@ -3,6 +3,65 @@ import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 import { useAuth } from "../../contexts/AuthContext";
 import { api, getApiErrorMessage } from "../../lib/api";
 
+function buildAssignmentId(modalidad: string, categoria: string, index: number) {
+  return `${modalidad}-${categoria}-${index}`;
+}
+
+function parseParticipantAssignments(participant: Pick<Participant, "modalidad" | "categoria">) {
+  const modalidades = participant.modalidad
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const categorias = participant.categoria
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  const parsedAssignments = categorias
+    .map((value, index) => {
+      const separatorIndex = value.indexOf(" - ");
+      if (separatorIndex >= 0) {
+        const modalidad = value.slice(0, separatorIndex).trim();
+        const categoria = value.slice(separatorIndex + 3).trim();
+        if (modalidad && categoria) {
+          return {
+            id: buildAssignmentId(modalidad, categoria, index),
+            modalidad,
+            categoria,
+          };
+        }
+      }
+
+      const fallbackModalidad = modalidades.length === 1 ? modalidades[0] : modalidades[index];
+      if (fallbackModalidad && value) {
+        return {
+          id: buildAssignmentId(fallbackModalidad, value, index),
+          modalidad: fallbackModalidad,
+          categoria: value,
+        };
+      }
+
+      return null;
+    })
+    .filter((item): item is CategoryAssignment => item !== null);
+
+  if (parsedAssignments.length > 0) {
+    return parsedAssignments;
+  }
+
+  if (modalidades.length === 1 && categorias.length === 1) {
+    return [
+      {
+        id: buildAssignmentId(modalidades[0], categorias[0], 0),
+        modalidad: modalidades[0],
+        categoria: categorias[0],
+      },
+    ];
+  }
+
+  return [];
+}
+
 type Evento = {
   id: number;
   nombre: string;
@@ -97,6 +156,9 @@ export default function ParticipantesPage() {
 
   const [editingParticipantId, setEditingParticipantId] = useState<number | null>(null);
   const [editingParticipantData, setEditingParticipantData] = useState<Partial<Participant>>({});
+  const [editSelectedModalidad, setEditSelectedModalidad] = useState("");
+  const [editSelectedCategoria, setEditSelectedCategoria] = useState("");
+  const [editingAssignments, setEditingAssignments] = useState<CategoryAssignment[]>([]);
   const [isSavingParticipant, setIsSavingParticipant] = useState(false);
   const [participantEditError, setParticipantEditError] = useState("");
 
@@ -294,6 +356,7 @@ export default function ParticipantesPage() {
   }
 
   function startEditingParticipant(participant: Participant) {
+    const nextAssignments = parseParticipantAssignments(participant);
     setEditingParticipantId(participant.id);
     setEditingParticipantData({
       nombres_apellidos: participant.nombres_apellidos,
@@ -303,20 +366,56 @@ export default function ParticipantesPage() {
       telefono: participant.telefono ?? "",
       correo: participant.correo ?? "",
       club_team: participant.club_team ?? "",
-      modalidad: participant.modalidad,
-      categoria: participant.categoria,
     });
+    setEditingAssignments(nextAssignments);
+    setEditSelectedModalidad("");
+    setEditSelectedCategoria("");
     setParticipantEditError("");
   }
 
   function cancelEditingParticipant() {
     setEditingParticipantId(null);
     setEditingParticipantData({});
+    setEditSelectedModalidad("");
+    setEditSelectedCategoria("");
+    setEditingAssignments([]);
     setParticipantEditError("");
   }
 
   function updateEditingParticipantField(field: keyof Participant, value: string) {
     setEditingParticipantData((current) => ({ ...current, [field]: value }));
+  }
+
+  function addEditingAssignment() {
+    if (!editSelectedModalidad || !editSelectedCategoria) {
+      setParticipantEditError("Selecciona una modalidad y una categoría antes de añadir.");
+      return;
+    }
+
+    const alreadyExists = editingAssignments.some(
+      (item) => item.modalidad === editSelectedModalidad && item.categoria === editSelectedCategoria,
+    );
+
+    if (alreadyExists) {
+      setParticipantEditError("Esa combinación ya fue agregada al competidor.");
+      return;
+    }
+
+    setEditingAssignments((current) => [
+      ...current,
+      {
+        id: buildAssignmentId(editSelectedModalidad, editSelectedCategoria, Date.now()),
+        modalidad: editSelectedModalidad,
+        categoria: editSelectedCategoria,
+      },
+    ]);
+    setEditSelectedModalidad("");
+    setEditSelectedCategoria("");
+    setParticipantEditError("");
+  }
+
+  function removeEditingAssignment(assignmentId: string) {
+    setEditingAssignments((current) => current.filter((item) => item.id !== assignmentId));
   }
 
   async function handleUpdateParticipant(participantId: number) {
@@ -327,8 +426,6 @@ export default function ParticipantesPage() {
     const trimmedName = editingParticipantData.nombres_apellidos?.trim();
     const trimmedMarca = editingParticipantData.marca_modelo?.trim();
     const trimmedPlaca = editingParticipantData.placa_rodaje?.trim();
-    const trimmedModalidad = editingParticipantData.modalidad?.trim();
-    const trimmedCategoria = editingParticipantData.categoria?.trim();
 
     if (!trimmedName) {
       setParticipantEditError("El nombre no puede estar vacío.");
@@ -342,24 +439,31 @@ export default function ParticipantesPage() {
       setParticipantEditError("La placa no puede estar vacía.");
       return;
     }
-    if (!trimmedModalidad) {
-      setParticipantEditError("La modalidad no puede estar vacía.");
-      return;
-    }
-    if (!trimmedCategoria) {
-      setParticipantEditError("La categoría no puede estar vacía.");
+    if (editingAssignments.length === 0) {
+      setParticipantEditError("Añade al menos una combinación de modalidad y categoría antes de guardar.");
       return;
     }
 
     setIsSavingParticipant(true);
     setParticipantEditError("");
 
+    const uniqueModalidades = Array.from(new Set(editingAssignments.map((item) => item.modalidad)));
+    const assignmentLabels = editingAssignments.map(
+      (item) => `${item.modalidad} - ${item.categoria}`,
+    );
+
     const payload = {
       nombres_apellidos: trimmedName,
       marca_modelo: trimmedMarca,
       placa_rodaje: trimmedPlaca,
-      modalidad: trimmedModalidad,
-      categoria: trimmedCategoria,
+      modalidad:
+        editingAssignments.length === 1
+          ? editingAssignments[0].modalidad
+          : uniqueModalidades.join(", "),
+      categoria:
+        editingAssignments.length === 1
+          ? editingAssignments[0].categoria
+          : assignmentLabels.join(", "),
       dni: editingParticipantData.dni?.trim() || null,
       telefono: editingParticipantData.telefono?.trim() || null,
       correo: editingParticipantData.correo?.trim() || null,
@@ -374,6 +478,9 @@ export default function ParticipantesPage() {
 
       setEditingParticipantId(null);
       setEditingParticipantData({});
+      setEditSelectedModalidad("");
+      setEditSelectedCategoria("");
+      setEditingAssignments([]);
 
       // Recargar listado manteniendo el evento seleccionado
       if (eventoId) {
@@ -703,27 +810,6 @@ export default function ParticipantesPage() {
                         onChange={(e) => updateEditingParticipantField("placa_rodaje", e.target.value)}
                         placeholder="Placa de rodaje"
                       />
-                      <select
-                        className="touch-input appearance-none"
-                        value={editingParticipantData.modalidad || ""}
-                        onChange={(e) => updateEditingParticipantField("modalidad", e.target.value)}
-                        disabled={isLoadingModalities}
-                      >
-                        <option value="">{isLoadingModalities ? "Cargando..." : "Selecciona modalidad"}</option>
-                        {modalities.map((mod) => <option key={mod.id} value={mod.nombre}>{mod.nombre}</option>)}
-                      </select>
-                      <select
-                        className="touch-input appearance-none"
-                        value={editingParticipantData.categoria || ""}
-                        onChange={(e) => updateEditingParticipantField("categoria", e.target.value)}
-                        disabled={!editingParticipantData.modalidad}
-                      >
-                        <option value="">{!editingParticipantData.modalidad ? "Selecciona modalidad primero" : "Selecciona categoría"}</option>
-                        {editingParticipantData.modalidad && modalities
-                          .find((m) => m.nombre === editingParticipantData.modalidad)?.categories.map((cat) => (
-                            <option key={cat.id} value={cat.nombre}>{cat.nombre}</option>
-                          ))}
-                      </select>
                       <input
                         className="touch-input"
                         value={editingParticipantData.dni || ""}
@@ -750,6 +836,49 @@ export default function ParticipantesPage() {
                       />
                     </div>
 
+                    <div className="rounded-3xl border border-slate-800 bg-slate-950/40 p-4">
+                      <div className="mb-4">
+                        <p className="text-sm font-medium text-white">Modalidades y categorías del competidor</p>
+                      </div>
+                      <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto]">
+                        <select
+                          className="touch-input appearance-none"
+                          onChange={(e) => setEditSelectedModalidad(e.target.value)}
+                          value={editSelectedModalidad}
+                          disabled={isLoadingModalities}
+                        >
+                          <option value="">{isLoadingModalities ? "Cargando..." : "Selecciona modalidad"}</option>
+                          {modalities.map((mod) => <option key={mod.id} value={mod.nombre}>{mod.nombre}</option>)}
+                        </select>
+                        <select
+                          className="touch-input appearance-none"
+                          onChange={(e) => setEditSelectedCategoria(e.target.value)}
+                          value={editSelectedCategoria}
+                          disabled={!editSelectedModalidad}
+                        >
+                          <option value="">{!editSelectedModalidad ? "Selecciona modalidad primero" : "Selecciona categoría"}</option>
+                          {editSelectedModalidad && modalities
+                            .find((m) => m.nombre === editSelectedModalidad)?.categories.map((cat) => (
+                              <option key={cat.id} value={cat.nombre}>{cat.nombre}</option>
+                            ))}
+                        </select>
+                        <button
+                          className="touch-button bg-brand-500 text-white shadow-lg shadow-brand-500/25 sm:w-auto sm:min-w-56"
+                          onClick={addEditingAssignment}
+                          type="button"
+                        >
+                          Añadir
+                        </button>
+                      </div>
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        {editingAssignments.length === 0 ? <span className="rounded-full border border-slate-700 bg-slate-900/70 px-3 py-2 text-xs text-slate-300">Sin categorías añadidas</span> : editingAssignments.map((item) => (
+                          <button key={item.id} className="inline-flex items-center gap-2 rounded-full border border-brand-400/30 bg-brand-400/10 px-3 py-2 text-xs font-semibold text-brand-100" onClick={() => removeEditingAssignment(item.id)} type="button">
+                            <span>{item.modalidad} - {item.categoria}</span><span className="text-brand-200">x</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
                     <div className="flex flex-wrap gap-2 pt-2">
                       <button
                         className="touch-button bg-brand-500 text-white shadow-lg shadow-brand-500/25 disabled:cursor-not-allowed disabled:opacity-60"
@@ -758,8 +887,7 @@ export default function ParticipantesPage() {
                           !editingParticipantData.nombres_apellidos?.trim() ||
                           !editingParticipantData.marca_modelo?.trim() ||
                           !editingParticipantData.placa_rodaje?.trim() ||
-                          !editingParticipantData.modalidad?.trim() ||
-                          !editingParticipantData.categoria?.trim()
+                          editingAssignments.length === 0
                         }
                         onClick={() => void handleUpdateParticipant(participant.id)}
                         type="button"

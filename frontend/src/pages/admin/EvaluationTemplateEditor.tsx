@@ -69,6 +69,7 @@ function buildTuningTemplateContent(): EditorTemplate {
     template_name: "Ficha Técnica: Categorización y Evaluación alCAT - Tuning 2025",
     modality: "Tuning",
     version: "2025",
+    template_type: "scored",
     evaluation_scale: DEFAULT_EVALUATION_SCALE,
     sections: [
       {
@@ -208,6 +209,7 @@ function buildCategorizationOnlyTemplate(modalityName: string): EditorTemplate {
     template_name: `Categorización ${modalityName}`,
     modality: modalityName,
     version: "2025",
+    template_type: "categorization_only",
     evaluation_scale: {},
     sections: [
       {
@@ -317,6 +319,11 @@ function normalizeTemplateContent(rawContent: unknown, modalityName: string): Ed
       ? (content.bonifications as Record<string, unknown>)
       : {};
   const rawBonusItems = Array.isArray(rawBonifications.items) ? rawBonifications.items : [];
+  const inferredTemplateType =
+    content.template_type === "categorization_only" ||
+    (sections.length > 0 && sections.every((section) => section.items.every((item) => item.max_score <= 0)))
+      ? "categorization_only"
+      : fallback.template_type;
 
   return {
     template_name:
@@ -326,8 +333,11 @@ function normalizeTemplateContent(rawContent: unknown, modalityName: string): Ed
     modality: modalityName,
     version:
       typeof content.version === "string" && content.version.trim() ? content.version.trim() : "2025",
+    template_type: inferredTemplateType,
     evaluation_scale:
-      content.evaluation_scale && typeof content.evaluation_scale === "object"
+      inferredTemplateType === "categorization_only"
+        ? {}
+        : content.evaluation_scale && typeof content.evaluation_scale === "object"
         ? (content.evaluation_scale as Record<string, string>)
         : DEFAULT_EVALUATION_SCALE,
     sections,
@@ -362,6 +372,7 @@ function serializeTemplateContent(content: EditorTemplate): EvaluationTemplateMa
     template_name: content.template_name.trim() || "Plantilla sin nombre",
     modality: content.modality,
     version: content.version.trim() || "2025",
+    template_type: content.template_type,
     evaluation_scale: content.evaluation_scale,
     sections: content.sections.map((section) => ({
       section_id: section.section_id.trim() || slugify(section.section_title) || "seccion",
@@ -428,6 +439,7 @@ export default function EvaluationTemplateEditorPage() {
       return a.nombre.localeCompare(b.nombre);
     });
   }, [selectedModality]);
+  const isCategorizationOnlyTemplate = content.template_type === "categorization_only";
 
   const previewJson = useMemo(
     () => JSON.stringify(serializeTemplateContent(content), null, 2),
@@ -533,7 +545,11 @@ export default function EvaluationTemplateEditorPage() {
       ...section,
       items: [
         ...section.items,
-        createEmptyItem(section.section_id || `section_${generateShortId()}`, section.items.length + 1),
+        createEmptyItem(
+          section.section_id || `section_${generateShortId()}`,
+          section.items.length + 1,
+          isCategorizationOnlyTemplate ? 0 : 5
+        ),
       ],
     }));
   }
@@ -705,7 +721,7 @@ export default function EvaluationTemplateEditorPage() {
             >
               {selectedModality?.nombre === "Tuning"
                 ? "Restaurar preset Tuning 2025"
-                : "Generar formato base"}
+                : "Aplicar preset base"}
             </button>
             {!isCreateMode && (
               <button
@@ -730,21 +746,29 @@ export default function EvaluationTemplateEditorPage() {
         <div className="mt-6 space-y-5">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-brand-200">Evaluación</p>
-              <h3 className="text-xl font-bold text-white">Secciones e ítems</h3>
+              <p className="text-sm font-medium text-brand-200">
+                {isCategorizationOnlyTemplate ? "Categorización" : "Evaluación"}
+              </p>
+              <h3 className="text-xl font-bold text-white">
+                {isCategorizationOnlyTemplate ? "Ítems de categorización" : "Secciones e ítems"}
+              </h3>
             </div>
-            <button
-              className="touch-button w-auto min-w-36 bg-brand-500 px-4 py-3 text-sm text-white"
-              onClick={addSection}
-              type="button"
-            >
-              + Añadir sección
-            </button>
+            {!isCategorizationOnlyTemplate && (
+              <button
+                className="touch-button w-auto min-w-36 bg-brand-500 px-4 py-3 text-sm text-white"
+                onClick={addSection}
+                type="button"
+              >
+                + Añadir sección
+              </button>
+            )}
           </div>
 
           {content.sections.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-950/60 px-4 py-8 text-center text-sm text-slate-400">
-              Esta plantilla todavía no tiene secciones. Crea una o carga el preset de la modalidad.
+              {isCategorizationOnlyTemplate
+                ? "Esta plantilla todavía no tiene ítems de categorización. Aplica un preset base o crea una plantilla nueva para esta modalidad."
+                : "Esta plantilla todavía no tiene secciones. Crea una o carga el preset de la modalidad."}
             </div>
           ) : (
             content.sections.map((section, sectionIndex) => (
@@ -753,6 +777,8 @@ export default function EvaluationTemplateEditorPage() {
                 section={section}
                 sectionIndex={sectionIndex}
                 categories={sortedCategories}
+                showSectionMeta={!isCategorizationOnlyTemplate}
+                showMaxScore={!isCategorizationOnlyTemplate}
                 onTitleChange={(value) =>
                   updateSection(sectionIndex, (s) => ({ ...s, section_title: value }))
                 }
@@ -778,42 +804,43 @@ export default function EvaluationTemplateEditorPage() {
             ))
           )}
 
-          {/* Bonifications */}
-          <BonificationSection
-            items={content.bonifications.items}
-            onAdd={addBonification}
-            onUpdateLabel={(itemIndex, value) =>
-              setContent((c) => ({
-                ...c,
-                bonifications: {
-                  ...c.bonifications,
-                  items: c.bonifications.items.map((entry, i) =>
-                    i === itemIndex ? { ...entry, label: value } : entry
-                  ),
-                },
-              }))
-            }
-            onUpdateMaxScore={(itemIndex, value) =>
-              setContent((c) => ({
-                ...c,
-                bonifications: {
-                  ...c.bonifications,
-                  items: c.bonifications.items.map((entry, i) =>
-                    i === itemIndex ? { ...entry, max_score: value as number } : entry
-                  ),
-                },
-              }))
-            }
-            onRemove={(itemIndex) =>
-              setContent((c) => ({
-                ...c,
-                bonifications: {
-                  ...c.bonifications,
-                  items: c.bonifications.items.filter((_, i) => i !== itemIndex),
-                },
-              }))
-            }
-          />
+          {!isCategorizationOnlyTemplate && (
+            <BonificationSection
+              items={content.bonifications.items}
+              onAdd={addBonification}
+              onUpdateLabel={(itemIndex, value) =>
+                setContent((c) => ({
+                  ...c,
+                  bonifications: {
+                    ...c.bonifications,
+                    items: c.bonifications.items.map((entry, i) =>
+                      i === itemIndex ? { ...entry, label: value } : entry
+                    ),
+                  },
+                }))
+              }
+              onUpdateMaxScore={(itemIndex, value) =>
+                setContent((c) => ({
+                  ...c,
+                  bonifications: {
+                    ...c.bonifications,
+                    items: c.bonifications.items.map((entry, i) =>
+                      i === itemIndex ? { ...entry, max_score: value as number } : entry
+                    ),
+                  },
+                }))
+              }
+              onRemove={(itemIndex) =>
+                setContent((c) => ({
+                  ...c,
+                  bonifications: {
+                    ...c.bonifications,
+                    items: c.bonifications.items.filter((_, i) => i !== itemIndex),
+                  },
+                }))
+              }
+            />
+          )}
         </div>
 
         {/* Messages */}
@@ -838,10 +865,10 @@ export default function EvaluationTemplateEditorPage() {
             type="button"
           >
             {isSaving
-              ? "Guardando..."
+              ? "Guardando preset..."
               : isCreateMode
-                ? "Crear plantilla maestra"
-                : "Guardar plantilla maestra"}
+                ? "Crear preset maestro"
+                : "Guardar preset maestro"}
           </button>
         </div>
       </section>

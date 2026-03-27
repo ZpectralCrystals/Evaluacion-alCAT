@@ -47,6 +47,7 @@ export type EditorTemplate = {
   template_name: string;
   modality: string;
   version: string;
+  template_type: "scored" | "categorization_only";
   evaluation_scale: Record<string, string>;
   sections: EditorTemplateSection[];
   bonifications: {

@@ -34,6 +34,9 @@ export function slugify(value: string): string {
 export function scaleEvaluationType(maxScore: number): string {
   const num = Number(maxScore);
   const safeMax = Number.isFinite(num) ? Math.max(0, Math.round(num)) : 5;
+  if (safeMax <= 0) {
+    return "categorization_only";
+  }
   return `scale_0_${safeMax}`;
 }
 
@@ -42,6 +45,10 @@ export function parseMaxScore(
 ): number {
   if (typeof item.max_score === "number" && Number.isFinite(item.max_score)) {
     return Math.max(0, Math.round(item.max_score));
+  }
+
+  if (item.evaluation_type === "categorization_only") {
+    return 0;
   }
 
   if (typeof item.evaluation_type === "string") {
@@ -102,12 +109,13 @@ export function createEmptySection(index: number): EditorTemplateSection {
 
 export function createEmptyItem(
   sectionId: string,
-  index: number
+  index: number,
+  maxScore = 5
 ): EditorTemplateItem {
   return createItem(
     `${sectionId}_item_${generateShortId()}`,
     `Nuevo ítem ${index}`,
-    5,
+    maxScore,
     []
   );
 }
@@ -125,6 +133,7 @@ export function buildBlankTemplateContent(modalityName: string): EditorTemplate 
     template_name: `Ficha Técnica ${modalityName}`,
     modality: modalityName,
     version: "2025",
+    template_type: "scored",
     evaluation_scale: DEFAULT_EVALUATION_SCALE,
     sections: [],
     bonifications: {

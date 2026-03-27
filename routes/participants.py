@@ -4,7 +4,7 @@ from typing import Optional, Union
 
 import pandas as pd
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -304,18 +304,32 @@ def list_participants(
     if current_user.role == "juez":
         assigned_modalities = current_user.modalidades_asignadas or []
         if assigned_modalities:
-            # Filter participants whose modalidad is in the assigned list
-            query = query.filter(
-                func.lower(Participant.modalidad).in_([m.lower() for m in assigned_modalities])
-            )
+            normalized_assigned_modalities = {
+                normalize_modalidad_key(modality)
+                for modality in assigned_modalities
+                if modality.strip()
+            }
+            if modalidad and modalidad.strip():
+                requested_modalidad = normalize_modalidad_key(modalidad)
+                if requested_modalidad not in normalized_assigned_modalities:
+                    return []
+                query = query.filter(build_modalidad_match_clause(modalidad))
+            else:
+                query = query.filter(
+                    or_(
+                        *[
+                            build_modalidad_match_clause(modality)
+                            for modality in assigned_modalities
+                            if modality.strip()
+                        ]
+                    )
+                )
         else:
             # Judge with no modalities assigned sees no participants
             return []
     elif modalidad:
         # Admin or other roles can filter by specific modalidad
-        query = query.filter(
-            func.lower(Participant.modalidad) == func.lower(modalidad.strip())
-        )
+        query = query.filter(build_modalidad_match_clause(modalidad))
     
     if categoria:
         query = query.filter(Participant.categoria.ilike(f"%{categoria.strip()}%"))

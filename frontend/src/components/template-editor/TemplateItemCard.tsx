@@ -5,6 +5,7 @@ type Props = {
   item: EditorTemplateItem;
   itemIndex: number;
   categories: CategoryRecord[];
+  showMaxScore?: boolean;
   onLabelChange: (value: string) => void;
   onMaxScoreChange: (value: number | "") => void;
   onRemove: () => void;
@@ -23,6 +24,7 @@ export function TemplateItemCard({
   item,
   itemIndex,
   categories,
+  showMaxScore = true,
   onLabelChange,
   onMaxScoreChange,
   onRemove,
@@ -36,8 +38,7 @@ export function TemplateItemCard({
       key={`${item.item_id}-${itemIndex}`}
       className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4"
     >
-      {/* Item header inputs */}
-      <div className="grid gap-4 lg:grid-cols-[1.2fr_0.55fr_auto]">
+      <div className={`grid gap-4 ${showMaxScore ? "lg:grid-cols-[1.2fr_0.55fr_auto]" : "lg:grid-cols-[1fr_auto]"}`}>
         <div>
           <label className="mb-2 block text-sm font-medium text-slate-300">
             Ítem
@@ -48,23 +49,27 @@ export function TemplateItemCard({
             value={item.label}
           />
         </div>
-        <div>
-          <label className="mb-2 block text-sm font-medium text-slate-300">
-            Puntaje máx.
-          </label>
-          <input
-            className="touch-input"
-            min={0}
-            onChange={(e) => {
-              const rawValue = e.target.value;
-              onMaxScoreChange(
-                rawValue === "" ? "" : Math.max(0, Number(rawValue))
-              );
-            }}
-            type="number"
-            value={item.max_score}
-          />
-        </div>
+
+        {showMaxScore && (
+          <div>
+            <label className="mb-2 block text-sm font-medium text-slate-300">
+              Puntaje máx.
+            </label>
+            <input
+              className="touch-input"
+              min={0}
+              onChange={(e) => {
+                const rawValue = e.target.value;
+                onMaxScoreChange(
+                  rawValue === "" ? "" : Math.max(0, Number(rawValue))
+                );
+              }}
+              type="number"
+              value={item.max_score}
+            />
+          </div>
+        )}
+
         <div className="flex items-end">
           <button
             className="touch-button w-auto min-w-32 border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100"
@@ -76,7 +81,6 @@ export function TemplateItemCard({
         </div>
       </div>
 
-      {/* Categorization options */}
       <div className="mt-4 space-y-3">
         <div className="flex items-center justify-between">
           <p className="text-sm font-medium text-slate-300">
@@ -93,12 +97,12 @@ export function TemplateItemCard({
 
         {item.categorization_options.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-950/50 px-4 py-4 text-sm text-slate-400">
-            Este ítem solo sumará puntaje. Si quieres que también recategorice,
-            añade opciones y elige la categoría real creada para esta modalidad.
+            {showMaxScore
+              ? "Este ítem solo sumará puntaje. Si quieres que también recategorice, añade opciones y elige la categoría real creada para esta modalidad."
+              : "Este ítem todavía no recategoriza. Añade opciones y elige la categoría real creada para esta modalidad."}
           </div>
         ) : (
           <div className="space-y-2">
-            {/* Header de labels - SIEMPRE visible */}
             <div className="mb-2 grid grid-cols-[minmax(250px,1fr)_280px_140px_auto] gap-3 rounded-lg border border-slate-600 bg-slate-800 px-3 py-2">
               <span className="block whitespace-nowrap text-xs font-semibold text-slate-200 uppercase tracking-wider">Etiqueta de la opción</span>
               <span className="block whitespace-nowrap text-xs font-semibold text-slate-200 uppercase tracking-wider">Categoría destino</span>

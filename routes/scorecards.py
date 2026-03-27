@@ -76,6 +76,33 @@ def resolve_assignment(db: Session, user_id: int, modality_id: int) -> JudgeAssi
     return assignment
 
 
+def get_or_create_score_card(
+    db: Session,
+    participant: Participant,
+    template: EvaluationTemplate,
+) -> ScoreCard:
+    score_card = (
+        db.query(ScoreCard)
+        .filter(ScoreCard.participant_id == participant.id)
+        .first()
+    )
+    if score_card is not None:
+        return score_card
+
+    score_card = ScoreCard(
+        participant_id=participant.id,
+        template_id=template.id,
+        answers={},
+        status="draft",
+        calculated_level=1,
+        total_score=0,
+    )
+    db.add(score_card)
+    db.commit()
+    db.refresh(score_card)
+    return score_card
+
+
 def build_item_lookup(template_content: dict[str, Any]) -> dict[str, dict[str, Any]]:
     sections = template_content.get("sections", [])
     if not isinstance(sections, list):
@@ -464,22 +491,7 @@ def partial_update_scorecard(
     validate_item_permissions(assignment, item_lookup, payload.answers)
     validate_incoming_answers(item_lookup, payload.answers)
 
-    score_card = (
-        db.query(ScoreCard)
-        .filter(ScoreCard.participant_id == participant.id)
-        .first()
-    )
-    if score_card is None:
-        score_card = ScoreCard(
-            participant_id=participant.id,
-            template_id=template.id,
-            answers={},
-            status="draft",
-            calculated_level=1,
-            total_score=0,
-        )
-        db.add(score_card)
-        db.flush()
+    score_card = get_or_create_score_card(db, participant, template)
 
     if score_card.status == "completed":
         if not assignment.is_principal or not current_user.can_edit_scores:
@@ -518,18 +530,9 @@ def get_scorecard_for_participant(
 
     modality = resolve_participant_modality(db, participant)
     resolve_assignment(db, current_user.id, modality.id)
+    template = resolve_evaluation_template(db, modality.id)
 
-    score_card = (
-        db.query(ScoreCard)
-        .filter(ScoreCard.participant_id == participant.id)
-        .first()
-    )
-    if score_card is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No existe una hoja de evaluación para este participante",
-        )
-    return score_card
+    return get_or_create_score_card(db, participant, template)
 
 
 @router.post("/api/scorecards/{participant_id}/finalize", response_model=ScoreCardFinalizeResponse)

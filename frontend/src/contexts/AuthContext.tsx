@@ -17,6 +17,7 @@ type AuthSession = {
   role: UserRole;
   userId: number | null;
   canEditScores: boolean;
+  modalidadesAsignadas: string[];
 };
 
 type LoginResponse = {
@@ -25,6 +26,7 @@ type LoginResponse = {
   role: UserRole;
   username: string;
   can_edit_scores: boolean;
+  modalidades_asignadas?: string[];
 };
 
 type UserProfileResponse = {
@@ -32,6 +34,7 @@ type UserProfileResponse = {
   username: string;
   role: UserRole;
   can_edit_scores: boolean;
+  modalidades_asignadas: string[];
 };
 
 type AuthContextValue = {
@@ -90,6 +93,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               ? parsedSession.userId
               : parseUserIdFromToken(parsedSession.token ?? ""),
           canEditScores: parsedSession.canEditScores === true,
+          modalidadesAsignadas: Array.isArray(parsedSession.modalidadesAsignadas)
+            ? parsedSession.modalidadesAsignadas.filter(
+                (value): value is string => typeof value === "string" && value.trim().length > 0
+              )
+            : [],
         };
         if (!hydratedSession.token || !hydratedSession.username) {
           throw new Error("Sesi\u00f3n inv\u00e1lida");
@@ -118,6 +126,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             username: response.data.username,
             role: response.data.role,
             canEditScores: response.data.can_edit_scores,
+            modalidadesAsignadas: Array.isArray(response.data.modalidades_asignadas)
+              ? response.data.modalidades_asignadas.filter((value) => value.trim().length > 0)
+              : [],
           };
           window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(nextSession));
           return nextSession;
@@ -142,6 +153,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       role: response.data.role,
       userId: parseUserIdFromToken(response.data.access_token),
       canEditScores: response.data.can_edit_scores,
+      modalidadesAsignadas: Array.isArray(response.data.modalidades_asignadas)
+        ? response.data.modalidades_asignadas.filter((value) => value.trim().length > 0)
+        : [],
     };
 
     window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session));
